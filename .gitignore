@@ -1,0 +1,10 @@
+/masking_env
+/models
+/masked_docs
+/unmasked_docs
+/logs
+/Tesseract-OCR
+/.EasyOCR
+/poppler-24.08.0
+.env
+
