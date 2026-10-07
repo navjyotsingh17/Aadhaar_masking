@@ -1,5 +1,4 @@
 /masking_env
-/models
 /masked_docs
 /unmasked_docs
 /logs
@@ -7,4 +6,6 @@
 /.EasyOCR
 /poppler-24.08.0
 .env
+__pycache__/
+
 

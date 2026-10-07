@@ -1,14 +1,11 @@
-import os, signal, re, time, threading
+import os, signal, time, threading
 import base64
 import uuid
 from services.mask_image import mask_aadhaar_image, image_classification
 from flask import Flask, jsonify, request, redirect, url_for, render_template, session, flash,send_file, abort, make_response
-from flask_session import Session  # Import Flask-Session
 import sqlite3
 from werkzeug.security import check_password_hash
 from datetime import datetime
-import logging
-from flask_cors import CORS
 from utils import encrypt_decrypt
 from dotenv import load_dotenv
 from config.logging_config import setup_logger
@@ -80,7 +77,7 @@ def mask():
             # filename = secure_filename(filename)
         
             if not filename:
-                log.info(f"Filename is not present for this document, therefore giving it a unique ID as filename")
+                print(f"Filename is not present for this document, therefore giving it a unique ID as filename")
                 doc_name = uuid.uuid4()
 
             else:
@@ -163,7 +160,7 @@ def detect():
         if decrypted_key == os.getenv('password'):
         
             if not filename:
-                log.info(f"Filename is not present for this document, therefore giving it a unique ID as filename")
+                print(f"Filename is not present for this document, therefore giving it a unique ID as filename")
                 doc_name = uuid.uuid4()
 
             else:

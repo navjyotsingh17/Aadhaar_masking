@@ -1,5 +1,4 @@
-import logging
-import os
+import logging, os
 from datetime import datetime, timedelta
 
 _logger_initialized = False

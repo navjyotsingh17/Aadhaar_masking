@@ -1,6 +1,5 @@
 from Crypto.Cipher import AES
-import base64
-import hashlib
+import base64, hashlib
 
 def pad(text):
     return text + (16 - len(text) % 16) * chr(16 - len(text) % 16)

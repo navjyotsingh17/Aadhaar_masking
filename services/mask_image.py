@@ -1,21 +1,18 @@
-import io,os, re
+import io, os, re, base64, warnings, math
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 import torch
 import easyocr
 import pytesseract
 import cv2, gc
-import math, os
-import base64
-import warnings
 import numpy as np
-import logging
 from PIL import Image
 from io import BytesIO
 from pdf2image import convert_from_bytes
 from collections import deque
 from ultralytics import YOLO
 from config.logging_config import setup_logger
+from pathlib import Path
 
 warnings.filterwarnings("ignore")
 
@@ -59,8 +56,10 @@ CLAHE = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
 
 MAX_PIXELS = 800 * 800  # ~6.4MP
 
-classification_model = YOLO(".\\models\\classification_model.pt")
-boundary_detection_model = YOLO(".\\models\\detection_model.pt")
+BASE_DIR = Path(__file__).resolve().parent.parent   # project root
+MODELS_DIR = BASE_DIR / "models"
+classification_model = YOLO(str(MODELS_DIR / "classification_model.pt"))
+boundary_detection_model = YOLO(str(MODELS_DIR / "detection_model.pt"))
 
 CONF_THRESHOLD = 0.80 
 NMS_THRESHOLD = 0.15 
@@ -86,7 +85,7 @@ def mask_aadhaar_image(bytes_data, mimetype, doc_name):
     try:
         if mimetype in ('tiff', 'tif', 'pdf'):
             try:
-                logging.info(f"File extension detected: {mimetype} File {doc_name} processing started ------------------------->")
+                print(f"File extension detected: {mimetype} File {doc_name} processing started ------------------------->")
                 
                 if mimetype in ('tif', 'tiff'):
                     is_tiff = True
@@ -128,13 +127,13 @@ def mask_aadhaar_image(bytes_data, mimetype, doc_name):
                         is_masked = True
                         masked_images_array.append(make_save_ready(pil_image, original_mode))
                         masked_page_numbers.append(i + 1)
-                        logging.info(f"#### page number {i + 1} is fully masked ####")
+                        print(f"#### page number {i + 1} is fully masked ####")
 
                     elif masked == -1 and is_aadhaar:
                         is_masked=True
                         masked_images_array.append(make_save_ready(pil_image, original_mode))
                         partially_masked_page_numbers.append(i + 1)
-                        logging.info(f"#### page number {i + 1} is partially masked ####")
+                        print(f"#### page number {i + 1} is partially masked ####")
 
                     elif masked == 0 and is_aadhaar:
                         masked_images_array.append(make_save_ready(original_frame, original_mode))
@@ -142,11 +141,11 @@ def mask_aadhaar_image(bytes_data, mimetype, doc_name):
                             pass
                         elif confidence >= 0.90:
                             unmasked_page_numbers.append(i + 1)
-                        logging.info(f"#### page number {i + 1}, is maybe a aadhaar card but it's unmasked ####")
+                        print(f"#### page number {i + 1}, is maybe a aadhaar card but it's unmasked ####")
 
                     else:
                         masked_images_array.append(make_save_ready(original_frame, original_mode))
-                        logging.info(f"#### page number {i + 1} is unmasked ####")
+                        print(f"#### page number {i + 1} is unmasked ####")
 
                     del frame, masked_image, pil_image
                     gc.collect()
@@ -194,7 +193,7 @@ def mask_aadhaar_image(bytes_data, mimetype, doc_name):
     
         else:
             try:
-                logging.info(f"File extension detected: {mimetype} File {doc_name} processing started ------------------------->")
+                print(f"File extension detected: {mimetype} File {doc_name} processing started ------------------------->")
                 input_stream = io.BytesIO(bytes_data)
                 image = Image.open(input_stream)
                 image_cv2 = ensure_correct_channels(image)
@@ -219,11 +218,11 @@ def mask_aadhaar_image(bytes_data, mimetype, doc_name):
                     return {"status": "masked", "masked_image_base64": masked_image_base64, "masked_page_numbers": "1", "remark":"Model found less than 2 or more than 3 aadhaar numbers. Recommended to review MASKED AADHAAR page numbers"}
                 
                 elif masked == 0 and is_aadhaar:
-                    logging.info("Current jpeg, jpg or png image is maybe a aadhaar but it's unmasked")
+                    print("Current jpeg, jpg or png image is maybe a aadhaar but it's unmasked")
                     return {"status": "unmasked", "unmasked_page_numbers": "1","remark":"Model classified few pages as aadhaar cards but unable to detect aadhaar number. Recommended to review UNMASKED AADHAAR page numbers"}
                 
                 else:
-                    logging.info("Current jpeg, jpg or png image is unmasked")
+                    print("Current jpeg, jpg or png image is unmasked")
                     return {"status": "unmasked", "remark":"Model did not classify document as Aadhaar card"}
 
             except Exception as err:
@@ -241,7 +240,7 @@ def mask_aadhaar_image(bytes_data, mimetype, doc_name):
     finally:
         masked_images_array.clear()
         gc.collect()
-        logging.info(f"File {doc_name} has been processed successfully and has {aadhar_cards_count} aadhaar cards, {mixed_docs_count} mixed docs and {other_docs_count} other docs ----------------------------------->")
+        print(f"File {doc_name} has been processed successfully and has {aadhar_cards_count} aadhaar cards, {mixed_docs_count} mixed docs and {other_docs_count} other docs ----------------------------------->")
 
 
 def process_image(frame_np):
@@ -254,14 +253,14 @@ def process_image(frame_np):
     frame_cv2 = cv2.bilateralFilter(frame_cv2, 9, 75, 75)
     class_name, confidence, is_aadhaar, angle, entropy, is_mixed_docs = classify_image(frame_cv2)
     
-    logging.info(f"Classification model response Class_name: {class_name} and confidence:- {confidence} and image is_aadhaar is {is_aadhaar}, angle is {angle} and entropy is {round(entropy, 4)}")
+    print(f"Classification model response Class_name: {class_name} and confidence:- {confidence} and image is_aadhaar is {is_aadhaar}, angle is {angle} and entropy is {round(entropy, 4)}")
     
     if is_aadhaar:
         corrected_image , is_corrected = correct_image_orientation(frame_np)
 
         if is_corrected:
             aadhaar_anchors_present = check_ocr_or_quartlet_after_rotation(corrected_image, -1)
-            logging.info(f"aadhaar_anchors_present in check_ocr_or_quartlet_after_rotation:- {aadhaar_anchors_present}")
+            print(f"aadhaar_anchors_present in check_ocr_or_quartlet_after_rotation:- {aadhaar_anchors_present}")
     
         if aadhaar_anchors_present:
             masked_image, masked = detect_boundaries_and_mask(corrected_image)
@@ -274,14 +273,14 @@ def process_image(frame_np):
         else:
             logging.warning(f"POSSIBLE FALSE POSITIVE CASE - attempting all angles OCRing")
             aadhaar_anchors_present = check_ocr_or_quartlet_after_rotation(frame_np, angle)
-            logging.info(f"aadhaar_anchors_present in check_ocr_or_quartlet_after_rotation:- {aadhaar_anchors_present}")
+            print(f"aadhaar_anchors_present in check_ocr_or_quartlet_after_rotation:- {aadhaar_anchors_present}")
 
             if aadhaar_anchors_present:
                 masked_image, masked = detect_boundaries_and_mask(frame_cv2)
                 return masked_image , masked, is_aadhaar, confidence, class_name, is_mixed_docs
         
     else:
-        logging.info(f"current image is not an aadhaar card")
+        print(f"current image is not an aadhaar card")
 
     return frame_cv2, masked, is_aadhaar, confidence, class_name, is_mixed_docs
 
@@ -291,10 +290,10 @@ def classify_image(image, rotations=[0, 90, 180, 270]):
     # Get the predicted class probabilities
     
     for angle in rotations:
-        # logging.info(f"For classification, rotating image for angle {angle} degree")
+        # print(f"For classification, rotating image for angle {angle} degree")
         rotated_image = rotate_image(image, angle) 
         results = classification_model([rotated_image], imgsz=1024 ,device='cpu', verbose=False)
-        # logging.info(f"results:- {results}")
+        # print(f"results:- {results}")
         
         if results:
             probs = results[0].probs
@@ -306,7 +305,7 @@ def classify_image(image, rotations=[0, 90, 180, 270]):
             probs_clipped = np.clip(all_probs, 1e-9, 1.0)
             entropy = float(-np.sum(probs_clipped * np.log2(probs_clipped)))
             # confidence_distribution = {results[0].names[i]: round(float(all_probs[i]), 4) for i in range(len(all_probs))}
-            # logging.info(f"confidence_distribution:- {confidence_distribution}")
+            # print(f"confidence_distribution:- {confidence_distribution}")
             
             if class_name == 'aadhar_cards':
                 
@@ -314,7 +313,7 @@ def classify_image(image, rotations=[0, 90, 180, 270]):
                     # if entropy > 0.15:
                     return class_name , confidence, True, angle, entropy, False
                 else:
-                    logging.info(f"confidence {confidence} is less than class threshold")
+                    print(f"confidence {confidence} is less than class threshold")
                     return class_name, confidence, False, angle, entropy, False
                 
             elif class_name == 'mixed_docs':
@@ -323,19 +322,19 @@ def classify_image(image, rotations=[0, 90, 180, 270]):
                     # if entropy > 0.15:
                     return class_name , confidence, True, angle, entropy, True
                 else:
-                    logging.info(f"confidence {confidence} is less than class threshold")
+                    print(f"confidence {confidence} is less than class threshold")
                     return class_name, confidence, False, angle, entropy, False
                 
             else:
                 rotation_count=rotation_count + 1
-                # logging.info(f"class name is {class_name}")
+                # print(f"class name is {class_name}")
         
         else:
             # logging.error(f"No results from document classification model.")
             return "unknown", 0, False, angle, entropy, False
     
     if rotation_count == 4:    
-        # logging.info(f"rotation count is {rotation_count}, therefore we can clearly say that image is non-aadhaar image")
+        # print(f"rotation count is {rotation_count}, therefore we can clearly say that image is non-aadhaar image")
         return class_name, confidence, False, angle, entropy, False
 
 
@@ -644,7 +643,7 @@ def detect_boundaries_and_mask(image):
                     return masked_img, 1
 
             else:
-                logging.info("Skip keywords found inside detect_boundaries_and_mask function, therefore image is unmasked")
+                print("Skip keywords found inside detect_boundaries_and_mask function, therefore image is unmasked")
                 return original_img, 0
             
         else:
@@ -661,7 +660,7 @@ def detect_boundaries_and_mask(image):
 
 def correct_image_orientation(image):
 
-    logging.info("inside correct_image_orientation")
+    print("inside correct_image_orientation")
 
     if image is None:
         return None, False
@@ -669,7 +668,7 @@ def correct_image_orientation(image):
     try:
         osd = pytesseract.image_to_osd(image)
         angle = int(re.search(r'(?<=Rotate: )\d+', osd).group(0))
-        logging.info(f"[INFO] IMAGE IS ROTATED BY {angle}°")
+        print(f"[INFO] IMAGE IS ROTATED BY {angle}°")
     except Exception as e:
         logging.error(f"[ERROR] CANNOT IDENTIFY ORIENTATION, DEFAULT TO MODEL ANGLE. error: {e}")
         return image, False
@@ -687,17 +686,17 @@ def correct_image_orientation(image):
 
 
 def check_ocr_or_quartlet_after_rotation(image, angle):
-    logging.info("inside check_ocr_or_quartlet_after_rotation")
+    print("inside check_ocr_or_quartlet_after_rotation")
     aadhaar_available = False
 
     # FOR CORRECTED IMAGES
     if angle == -1:
         aadhaar_available, _ = verify_classification_text(image, primary_reader)
-        logging.info(f"aadhaar_available in english reader:- {aadhaar_available}")
+        print(f"aadhaar_available in english reader:- {aadhaar_available}")
 
         if not aadhaar_available:
             aadhaar_available, _ = verify_classification_text(image, devnagiri_reader)
-            logging.info(f"aadhaar_available in devnagiri reader:- {aadhaar_available}")
+            print(f"aadhaar_available in devnagiri reader:- {aadhaar_available}")
     
         return aadhaar_available
     
@@ -718,15 +717,15 @@ def check_ocr_or_quartlet_after_rotation(image, angle):
 
     # while angle_list:
     current_angle = angle_list.popleft()
-    logging.info(f"trying rotation for angle : {current_angle}")
+    print(f"trying rotation for angle : {current_angle}")
     rotated_image = rotate_image(image, current_angle)
 
     aadhaar_available, _ = verify_classification_text(rotated_image, primary_reader)
-    logging.info(f"aadhaar_available in english reader:- {aadhaar_available}")
+    print(f"aadhaar_available in english reader:- {aadhaar_available}")
 
     if not aadhaar_available:
         aadhaar_available, _ = verify_classification_text(rotated_image, devnagiri_reader)
-        logging.info(f"aadhaar_available in devnagiri reader:- {aadhaar_available}")
+        print(f"aadhaar_available in devnagiri reader:- {aadhaar_available}")
        
     if aadhaar_available:
         return aadhaar_available
@@ -735,7 +734,7 @@ def check_ocr_or_quartlet_after_rotation(image, angle):
 
 
 def verify_aadhaar_number(image):
-    logging.info("inside verify_classification_text")
+    print("inside verify_classification_text")
 
     try:
         # Reuse module-level CLAHE instead of creating new one each iteration
@@ -753,7 +752,7 @@ def verify_aadhaar_number(image):
             mag_ratio = mag_ratio,
             canvas_size = canvas_size
         )
-        logging.info(f"ocr_results in verify_aadhaar_number: {ocr_results}")   
+        print(f"ocr_results in verify_aadhaar_number: {ocr_results}")   
 
     except Exception as e:
         logging.error(f"error in verify_classification_text: {e}")
@@ -770,9 +769,9 @@ def verify_aadhaar_number(image):
         for num in numbers:
             if len(num) == 4 and num.isdigit():
                correct_number=+1
-               logging.info(f"✓ {num} - Valid (4 digits)")
+               print(f"✓ {num} - Valid (4 digits)")
             else:
-                logging.info(f"✗ {num} - Invalid")
+                print(f"✗ {num} - Invalid")
 
     if correct_number == 3:
         return True, full_text
@@ -781,7 +780,7 @@ def verify_aadhaar_number(image):
     
 
 def verify_classification_text(image, reader):
-    logging.info("inside verify_classification_text")
+    print("inside verify_classification_text")
 
     try:
         # Reuse module-level CLAHE instead of creating new one each iteration
@@ -799,7 +798,7 @@ def verify_classification_text(image, reader):
             mag_ratio = mag_ratio,
             canvas_size = canvas_size
         )
-        logging.info(f"ocr_results in verify_classification_text: {ocr_results}")   
+        print(f"ocr_results in verify_classification_text: {ocr_results}")   
 
     except Exception as e:
         logging.error(f"error in verify_classification_text: {e}")
@@ -816,7 +815,7 @@ def verify_classification_text(image, reader):
 
     # Pre-compiled regex — no recompilation overhead
     if QUARTLET_PATTERN.search(full_text):
-        logging.info("aadhaar pattern found in verify_classification_text")
+        print("aadhaar pattern found in verify_classification_text")
         return True, full_text
     
     else:
@@ -1024,7 +1023,7 @@ def separate_tiff_pages(base64_string):
     original_mode = image.mode
     original_dpi = image.info.get('dpi')
     original_compression = image.info.get('compression')
-    logging.info(f"mode is {original_mode}, dpi is {original_dpi} and compression {original_compression}")
+    print(f"mode is {original_mode}, dpi is {original_dpi} and compression {original_compression}")
     
     frames = []
     try:
@@ -1050,32 +1049,33 @@ def separate_tiff_pages(base64_string):
 
 def process_base64_pdf(pdf):
     try:
-        images = convert_from_bytes(pdf)
-        logging.info("PDF Processing Finished")
+        print("PDF Processing Started")
+        images = convert_from_bytes(pdf, poppler_path=".\\poppler-24.08.0\\Library\\bin")
+        print("PDF Processing Finished")
         return [cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR) for image in images]
     except Exception as e:
-        logging.info(f"Error processing base64 PDF: {e}")
+        print(f"Error processing base64 PDF: {e}")
         return []
 
         
 def image_classification(image, mimetype, doc_name):
     if mimetype in ("jpeg", "jpg", "png"):
-        logging.info(f"File {doc_name} processing started ------------------------->")
+        print(f"File {doc_name} processing started ------------------------->")
         input_stream = io.BytesIO(image)
         image = Image.open(input_stream)
         image_cv2 = ensure_correct_channels(image)
         image_cv2 = downscale_cv2(image_cv2)      
         class_name, confidence , is_aadhaar, angle, entropy = classify_image(image_cv2)
-        logging.info(f"Classification model response Class_name: {class_name}, confidence:- {confidence} and image is_aadhaar is {is_aadhaar}")
-        logging.info(f"File {doc_name} has been processed successfully -------------------------->")
+        print(f"Classification model response Class_name: {class_name}, confidence:- {confidence} and image is_aadhaar is {is_aadhaar}")
+        print(f"File {doc_name} has been processed successfully -------------------------->")
         return class_name
     elif mimetype in ("pdf"):
         pdf_images = process_base64_pdf(image)  # This should return list of numpy arrays
         for i, frame in enumerate(pdf_images):
             frame = downscale_cv2(frame)                       
             class_name, confidence , is_aadhaar, angle, entropy = classify_image(frame)
-            logging.info(f"Classification model response Class_name: {class_name}, confidence:- {confidence} and image is_aadhaar is {is_aadhaar}")
-            logging.info(f"File {doc_name} has been processed successfully -------------------------->")
+            print(f"Classification model response Class_name: {class_name}, confidence:- {confidence} and image is_aadhaar is {is_aadhaar}")
+            print(f"File {doc_name} has been processed successfully -------------------------->")
         return class_name
     else:
         pass
