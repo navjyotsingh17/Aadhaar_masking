@@ -3,9 +3,12 @@
 /unmasked_docs
 /logs
 /Tesseract-OCR
+/input_folder
+/config
+/utils
 /.EasyOCR
-/poppler-24.08.0
 .env
+.secrets
 __pycache__/
 
 

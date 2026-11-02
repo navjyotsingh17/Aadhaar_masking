@@ -6,10 +6,10 @@ cv2.setNumThreads(1)
 cv2.ocl.setUseOpenCL(False)
 
 if __name__ == "__main__":
-    print("Masking Engine is running on http://127.0.0.1:5000/mask")
+    print("Masking Engine is running on http://127.0.0.1:5000/api/mask")
     serve(
         app,
-        host="0.0.0.0",
+        host="127.0.0.1", # nosec B104
         port=5000,
         threads=1
     )

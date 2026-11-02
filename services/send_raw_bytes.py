@@ -8,19 +8,19 @@ def tiff_to_raw_and_send(file_path, api_url):
         with open(file_path, 'rb') as f:
             raw_bytes = f.read()
 
-        print(f"Read {len(raw_bytes)} bytes from {filename}")
         response = requests.post(
             api_url,
             data=raw_bytes,
             headers={
                 'Content-Type': 'application/octet-stream',
                 'X-Filename': filename,
-                'X-Password': 'i2UYSL94jrUWTI8B73mc3w==',
-                'X-Mimetype':'tiff',
-                'X-Output-Folder': '/data/masked_docs',
+                'X-Password': 'Z0FBQUFBQnE2RnhvMzdaWGFEOGhlTlFCQU9PZkJ4eHgxcDJRLTZxSnFJc3RteXJjRnBZaUpkOEQ2eXBvdHpiYk53ZGZkNFVhOWZGSGxYNlpzS1NoLWxrRGZPS0IyTEZ1LXc9PQ==',
+                'X-Mimetype':'pdf',
+                # 'X-Output-Folder': '/data/masked_docs',
+                'X-Output-Folder': r'D:\Python_Masking_Engine\masked_docs',
                 'page':'97'
-
-            }
+            },
+            timeout=(5, 3600), 
         )
 
         print(f"Received response: {response.status_code}")
@@ -37,8 +37,8 @@ def tiff_to_raw_and_send(file_path, api_url):
         print(f"Error processing {file_path}: {e}")
 
 # Example usage
-file_path = r'D:\Python_Masking_Engine\unmasked_docs\4_unmasked.tiff'
+file_path = r'D:\Aadhaar Masking\Python_Masking_Engine\unmasked_docs\4_unmasked.pdf'
 
-api_endpoint = "http://localhost:5000/mask"
+api_endpoint = "http://localhost:5000/api/mask"
 
 tiff_to_raw_and_send(file_path, api_endpoint)

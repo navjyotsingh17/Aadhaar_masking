@@ -1,6 +1,4 @@
 import io, os, re, base64, warnings, math
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["MKL_NUM_THREADS"] = "1"
 import torch
 import easyocr
 import pytesseract
@@ -8,22 +6,24 @@ import cv2, gc
 import numpy as np
 from PIL import Image
 from io import BytesIO
-from pdf2image import convert_from_bytes
 from collections import deque
 from ultralytics import YOLO
-from config.logging_config import setup_logger
 from pathlib import Path
+import pymupdf as pdf
+
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OMP_NUM_THREADS"] = "1"
 
 warnings.filterwarnings("ignore")
-
-logging = setup_logger()
 
 torch.set_num_threads(1)
 
 primary_reader = easyocr.Reader(['en'], gpu=False, detector='dbnet18',  verbose=False)
 devnagiri_reader = easyocr.Reader(['en','hi','mr'], gpu=False, detector='dbnet18',  verbose=False)
 
-pytesseract.pytesseract.tesseract_cmd = os.getenv("tesseract_path")
+
+pytesseract.pytesseract.tesseract_cmd = r"/usr/bin/tesseract"
+# pytesseract.pytesseract.tesseract_cmd = r"D:\Python_Masking_Engine\Tesseract-OCR\tesseract.exe"
 
 canvas_size=1920
 mag_ratio=1.5
@@ -85,7 +85,7 @@ def mask_aadhaar_image(bytes_data, mimetype, doc_name):
     try:
         if mimetype in ('tiff', 'tif', 'pdf'):
             try:
-                print(f"File extension detected: {mimetype} File {doc_name} processing started ------------------------->")
+                print(f"File extension detected: {mimetype}, file {doc_name} processing started ------------------------->")
                 
                 if mimetype in ('tif', 'tiff'):
                     is_tiff = True
@@ -113,7 +113,7 @@ def mask_aadhaar_image(bytes_data, mimetype, doc_name):
                     pil_image = Image.fromarray(cv2.cvtColor(masked_image, cv2.COLOR_BGR2RGB))
 
                     if not isinstance(masked_image, np.ndarray):
-                        logging.error(f"process_image returned invalid image at page { i+1 }")
+                        print(f"process_image returned invalid image at page { i+1 }")
                         continue
 
                     if class_name in ('aadhar_cards'):
@@ -188,7 +188,7 @@ def mask_aadhaar_image(bytes_data, mimetype, doc_name):
                         return {"status": "unmasked", "unmasked_page_numbers": unmasked_page_numbers, "remark":"Model didn't classified document as Aadhaar card"}
 
             except Exception as err:
-                logging.error(f"Error processing TIFF / PDF: {err}")
+                print(f"Error processing TIFF / PDF: {err}")
                 return {"status": "unmasked", "masked_image_base64": None, "masked_page_numbers": "","unmasked_page_numbers": "","partially_masked_page_numbers": "", "remark": err}
     
         else:
@@ -226,7 +226,7 @@ def mask_aadhaar_image(bytes_data, mimetype, doc_name):
                     return {"status": "unmasked", "remark":"Model did not classify document as Aadhaar card"}
 
             except Exception as err:
-                logging.error(f"Error processing JPEG, JPG, PNG: {err}")
+                print(f"Error processing JPEG, JPG, PNG: {err}")
                 return {"status": "unmasked", "masked_image_base64": None, "masked_page_numbers": "","unmasked_page_numbers": "","partially_masked_page_numbers": "", "remark": err}
             
             finally:
@@ -234,7 +234,7 @@ def mask_aadhaar_image(bytes_data, mimetype, doc_name):
                 gc.collect()                                       
     
     except Exception as e:
-        logging.error(f"Unexpected error: {e}")
+        print(f"Unexpected error: {e}")
         return {"status": "unmasked", "masked_image_base64": None, "masked_page_numbers": "","unmasked_page_numbers": "","partially_masked_page_numbers": "", "remark": err}
     
     finally:
@@ -260,7 +260,7 @@ def process_image(frame_np):
 
         if is_corrected:
             aadhaar_anchors_present = check_ocr_or_quartlet_after_rotation(corrected_image, -1)
-            print(f"aadhaar_anchors_present in check_ocr_or_quartlet_after_rotation:- {aadhaar_anchors_present}")
+            # print(f"aadhaar_anchors_present in check_ocr_or_quartlet_after_rotation:- {aadhaar_anchors_present}")
     
         if aadhaar_anchors_present:
             masked_image, masked = detect_boundaries_and_mask(corrected_image)
@@ -271,7 +271,7 @@ def process_image(frame_np):
             return masked_image , masked, is_aadhaar, confidence, class_name, is_mixed_docs
     
         else:
-            logging.warning(f"POSSIBLE FALSE POSITIVE CASE - attempting all angles OCRing")
+            print(f"POSSIBLE FALSE POSITIVE CASE - attempting all angles OCRing")
             aadhaar_anchors_present = check_ocr_or_quartlet_after_rotation(frame_np, angle)
             print(f"aadhaar_anchors_present in check_ocr_or_quartlet_after_rotation:- {aadhaar_anchors_present}")
 
@@ -330,7 +330,7 @@ def classify_image(image, rotations=[0, 90, 180, 270]):
                 # print(f"class name is {class_name}")
         
         else:
-            # logging.error(f"No results from document classification model.")
+            # print(f"No results from document classification model.")
             return "unknown", 0, False, angle, entropy, False
     
     if rotation_count == 4:    
@@ -651,7 +651,7 @@ def detect_boundaries_and_mask(image):
             return original_img, 0
 
     except Exception as e:
-        logging.error(f"Exception in detect_boundaries_and_mask function:- {e}")
+        print(f"Exception in detect_boundaries_and_mask function:- {e}")
         return original_img, 0
 
 
@@ -660,7 +660,7 @@ def detect_boundaries_and_mask(image):
 
 def correct_image_orientation(image):
 
-    print("inside correct_image_orientation")
+    # print("inside correct_image_orientation")
 
     if image is None:
         return None, False
@@ -668,9 +668,9 @@ def correct_image_orientation(image):
     try:
         osd = pytesseract.image_to_osd(image)
         angle = int(re.search(r'(?<=Rotate: )\d+', osd).group(0))
-        print(f"[INFO] IMAGE IS ROTATED BY {angle}°")
+        # print(f"[INFO] IMAGE IS ROTATED BY {angle}°")
     except Exception as e:
-        logging.error(f"[ERROR] CANNOT IDENTIFY ORIENTATION, DEFAULT TO MODEL ANGLE. error: {e}")
+        # print(f"[ERROR] CANNOT IDENTIFY ORIENTATION, DEFAULT TO MODEL ANGLE. error: {e}")
         return image, False
 
     if angle == 90:
@@ -686,17 +686,17 @@ def correct_image_orientation(image):
 
 
 def check_ocr_or_quartlet_after_rotation(image, angle):
-    print("inside check_ocr_or_quartlet_after_rotation")
+    # print("inside check_ocr_or_quartlet_after_rotation")
     aadhaar_available = False
 
     # FOR CORRECTED IMAGES
     if angle == -1:
         aadhaar_available, _ = verify_classification_text(image, primary_reader)
-        print(f"aadhaar_available in english reader:- {aadhaar_available}")
+        # print(f"aadhaar_available in english reader:- {aadhaar_available}")
 
         if not aadhaar_available:
             aadhaar_available, _ = verify_classification_text(image, devnagiri_reader)
-            print(f"aadhaar_available in devnagiri reader:- {aadhaar_available}")
+            # print(f"aadhaar_available in devnagiri reader:- {aadhaar_available}")
     
         return aadhaar_available
     
@@ -717,15 +717,15 @@ def check_ocr_or_quartlet_after_rotation(image, angle):
 
     # while angle_list:
     current_angle = angle_list.popleft()
-    print(f"trying rotation for angle : {current_angle}")
+    # print(f"trying rotation for angle : {current_angle}")
     rotated_image = rotate_image(image, current_angle)
 
     aadhaar_available, _ = verify_classification_text(rotated_image, primary_reader)
-    print(f"aadhaar_available in english reader:- {aadhaar_available}")
+    # print(f"aadhaar_available in english reader:- {aadhaar_available}")
 
     if not aadhaar_available:
         aadhaar_available, _ = verify_classification_text(rotated_image, devnagiri_reader)
-        print(f"aadhaar_available in devnagiri reader:- {aadhaar_available}")
+        # print(f"aadhaar_available in devnagiri reader:- {aadhaar_available}")
        
     if aadhaar_available:
         return aadhaar_available
@@ -734,7 +734,7 @@ def check_ocr_or_quartlet_after_rotation(image, angle):
 
 
 def verify_aadhaar_number(image):
-    print("inside verify_classification_text")
+    # print("inside verify_classification_text")
 
     try:
         # Reuse module-level CLAHE instead of creating new one each iteration
@@ -752,10 +752,10 @@ def verify_aadhaar_number(image):
             mag_ratio = mag_ratio,
             canvas_size = canvas_size
         )
-        print(f"ocr_results in verify_aadhaar_number: {ocr_results}")   
+        # print(f"ocr_results in verify_aadhaar_number: {ocr_results}")   
 
     except Exception as e:
-        logging.error(f"error in verify_classification_text: {e}")
+        # print(f"error in verify_classification_text: {e}")
         ocr_results = []  # prevent NameError on full_text join below
 
     full_text = " ".join(ocr_results).lower()
@@ -769,9 +769,10 @@ def verify_aadhaar_number(image):
         for num in numbers:
             if len(num) == 4 and num.isdigit():
                correct_number=+1
-               print(f"✓ {num} - Valid (4 digits)")
+            #    print(f"✓ {num} - Valid (4 digits)")
             else:
-                print(f"✗ {num} - Invalid")
+                pass
+                # print(f"✗ {num} - Invalid")
 
     if correct_number == 3:
         return True, full_text
@@ -780,7 +781,7 @@ def verify_aadhaar_number(image):
     
 
 def verify_classification_text(image, reader):
-    print("inside verify_classification_text")
+    # print("inside verify_classification_text")
 
     try:
         # Reuse module-level CLAHE instead of creating new one each iteration
@@ -798,10 +799,10 @@ def verify_classification_text(image, reader):
             mag_ratio = mag_ratio,
             canvas_size = canvas_size
         )
-        print(f"ocr_results in verify_classification_text: {ocr_results}")   
+        # print(f"ocr_results in verify_classification_text: {ocr_results}")   
 
     except Exception as e:
-        logging.error(f"error in verify_classification_text: {e}")
+        # print(f"error in verify_classification_text: {e}")
         ocr_results = []  # prevent NameError on full_text join below
 
     full_text = " ".join(ocr_results).lower()
@@ -815,7 +816,7 @@ def verify_classification_text(image, reader):
 
     # Pre-compiled regex — no recompilation overhead
     if QUARTLET_PATTERN.search(full_text):
-        print("aadhaar pattern found in verify_classification_text")
+        # print("aadhaar pattern found in verify_classification_text")
         return True, full_text
     
     else:
@@ -1047,14 +1048,19 @@ def separate_tiff_pages(base64_string):
     return frames, original_mode, original_dpi, original_compression
 
 
-def process_base64_pdf(pdf):
+def process_base64_pdf(pdf_bytes, dpi=200):
     try:
         print("PDF Processing Started")
-        images = convert_from_bytes(pdf, poppler_path=".\\poppler-24.08.0\\Library\\bin")
+        images = []
+        with pdf.open(stream=pdf_bytes, filetype="pdf") as doc:
+            for page in doc:
+                pix = page.get_pixmap(dpi=dpi, colorspace=pdf.csRGB, alpha=False)
+                img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, 3)
+                images.append(cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
         print("PDF Processing Finished")
-        return [cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR) for image in images]
+        return images
     except Exception as e:
-        print(f"Error processing base64 PDF: {e}")
+        print(f"Error processing PDF bytes: {e}")
         return []
 
         
