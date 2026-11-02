@@ -1,4 +1,4 @@
-name: masking_engine_ci_worflow
+name: masking_engine_ci_workflow
 
 on:
   pull_request:
@@ -8,7 +8,7 @@ on:
       branches:
               [dev]
 
-              
+
   workflow_dispatch:            # manual "Run workflow" button
     inputs:
       image_tag:
