@@ -22,7 +22,7 @@ spec:
       serviceAccountName: aadhaar-masking
       containers:
         - name: masking-engine
-          image: navjyotsinghpulaha/masking_engine:41443647275
+          image: navjyotsinghpulaha/masking_engine:42017283539
           imagePullPolicy: Always
           ports:
             - containerPort: 5000
