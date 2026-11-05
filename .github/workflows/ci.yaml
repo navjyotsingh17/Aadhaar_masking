@@ -97,7 +97,7 @@ jobs:
       steps:
         - uses: actions/checkout@v5
           with:
-                token: ${{ secrets.github_TOKEN }}
+                token: ${{ secrets.GH_TOKEN }}
 
         - name: Update K8s manifest with new image tag
           run: |
