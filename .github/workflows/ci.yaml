@@ -13,7 +13,7 @@ on:
     inputs:
       image_tag:
         description: "Image tag (leave empty to use the commit SHA)"
-        required: true
+        required: false
         type: string
 
 
