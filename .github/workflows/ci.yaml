@@ -13,7 +13,7 @@ on:
     inputs:
       image_tag:
         description: "Image tag (leave empty to use the commit SHA)"
-        required: false
+        required: true
         type: string
 
 
@@ -71,12 +71,12 @@ jobs:
         - uses: actions/checkout@v5
 
         - name: Build image
-          run: docker build -t ${{ secrets.DOCKER_USERNAME }}/masking_engine:${{ github.run_id }} .
+          run: docker build -t ${{ secrets.DOCKER_USERNAME }}/masking_engine:${{ github.run_id || image_tag }} .
 
         - name: Scan image (Trivy)
           uses: aquasecurity/trivy-action@v0.36.0   # pin to a release tag in real use
           with:
-            image-ref: ${{ secrets.DOCKER_USERNAME }}/masking_engine:${{ github.run_id }}
+            image-ref: ${{ secrets.DOCKER_USERNAME }}/masking_engine:${{ github.run_id || image_tag }}
             severity: HIGH,CRITICAL
             ignore-unfixed: true
             exit-code: '1'
@@ -88,7 +88,7 @@ jobs:
             password: ${{ secrets.DOCKER_TOKEN }}
 
         - name: Push image to Docker Hub
-          run: docker push ${{ secrets.DOCKER_USERNAME }}/masking_engine:${{ github.run_id }}
+          run: docker push ${{ secrets.DOCKER_USERNAME }}/masking_engine:${{ github.run_id || image_tag }}
 
 
     update-K8s-manifest:
@@ -97,11 +97,11 @@ jobs:
       steps:
         - uses: actions/checkout@v5
           with:
-                token: ${{ secrets.GH_TOKEN }}
+                token: ${{ secrets.github_TOKEN }}
 
         - name: Update K8s manifest with new image tag
           run: |
-                sed -i "s|image: .*|image: ${{ secrets.DOCKER_USERNAME }}/masking_engine:${{ github.run_id }}|" kubernetes/deployment-masking-engine.yaml
+                sed -i "s|image: .*|image: ${{ secrets.DOCKER_USERNAME }}/masking_engine:${{ github.run_id || image_tag }}|" kubernetes/deployment-masking-engine.yaml
 
         - name: Commit and push changes
           run: |
